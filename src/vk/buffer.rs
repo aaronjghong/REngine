@@ -2,7 +2,7 @@ use vulkano::device::Device;
 use vulkano::memory::allocator::{StandardMemoryAllocator, AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer, BufferContents};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryAutoCommandBuffer};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryAutoCommandBuffer, CommandBufferExecFuture, PrimaryCommandBufferAbstract};
 use vulkano::device::Queue;
 use vulkano::memory::MemoryPropertyFlags;
 use vulkano::sync::{self, GpuFuture};
@@ -78,7 +78,7 @@ pub fn create_index_buffer(memory_allocator: Arc<StandardMemoryAllocator>, size:
 
 //https://docs.rs/vulkano/0.34.0/vulkano/command_buffer/index.html
 // Creates a primary command buffer that copies the contents of buffer_src to buffer_dst
-pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardCommandBufferAllocator>, queue: Arc<Queue>) -> Arc<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>> {
+pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardCommandBufferAllocator>, queue: Arc<Queue>) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>> {
     let mut builder = AutoCommandBufferBuilder::primary(
         &command_buffer_allocator,
         queue.queue_family_index(),
@@ -86,20 +86,22 @@ pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardComma
     ).unwrap();
 
     // We let the App take ownership of the builder so that it can be used to build the command buffer
-    Arc::new(builder)
+    builder
 }
 
-pub fn submit(queue: Arc<Queue>, command_buffer_builder: Arc<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>>) {
-    let command_buffer = command_buffer_builder.build().unwrap();
+// pub fn submit(device: Arc<Device>, queue: Arc<Queue>, command_buffer_builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>) {
+//     let command_buffer = command_buffer_builder.build().unwrap();
 
-    sync::now(device.clone())
-        .then_execute(queue.clone(), command_buffer)
-        .unwrap()
+//     sync::now(device.clone())
+//         .then_execute(queue.clone(), command_buffer)
+//         .unwrap()
+// }
+
+pub fn build_command_buffer(command_buffer_builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>) -> Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>> {
+    command_buffer_builder.build().unwrap()
 }
 
-pub fn submit_execute(queue: Arc<Queue>, command_buffer_builder: Arc<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>>) {
-    let command_buffer = command_buffer_builder.build().unwrap();
-
+pub fn submit_execute(device: Arc<Device>, queue: Arc<Queue>, command_buffer: Arc<PrimaryAutoCommandBuffer>) {
     sync::now(device.clone())
         .then_execute(queue.clone(), command_buffer)
         .unwrap()
@@ -107,9 +109,7 @@ pub fn submit_execute(queue: Arc<Queue>, command_buffer_builder: Arc<AutoCommand
         .unwrap();
 }
 
-pub fn submit_execute_wait_fenced(queue: Arc<Queue>, command_buffer_builder: Arc<AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>>) -> GpuFuture<()> {
-    let command_buffer = command_buffer_builder.build().unwrap();
-
+pub fn submit_execute_wait_fenced(device: Arc<Device>, queue: Arc<Queue>, command_buffer: Arc<PrimaryAutoCommandBuffer>){
     let future = sync::now(device.clone())
         .then_execute(queue.clone(), command_buffer)
         .unwrap()
@@ -117,5 +117,5 @@ pub fn submit_execute_wait_fenced(queue: Arc<Queue>, command_buffer_builder: Arc
         .unwrap();
 
     future.wait(None).unwrap();
-    
+
 }

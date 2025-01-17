@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 pub mod device;
 pub mod buffer;
+pub mod shader;
 
 pub fn create_instance() -> Arc<Instance> {
     let library = VulkanLibrary::new().expect("Failed to load Vulkan library");
