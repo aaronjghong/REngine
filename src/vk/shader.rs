@@ -6,16 +6,16 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 
-pub struct Shaders<'a> {
+pub struct Shaders {
     pub vertex: Option<Arc<ShaderModule>>,
     pub fragment: Option<Arc<ShaderModule>>,
     pub compute: Option<Arc<ShaderModule>>,
     compiler: Option<Compiler>,
-    compiler_options: Option<CompileOptions<'a>>,
+    compiler_options: Option<Box<CompileOptions<'static>>>,
     device: Arc<Device>,
 }
 
-impl<'a> Shaders<'a> {
+impl Shaders {
     pub fn new(device: Arc<Device>) -> Self {
         Self { vertex: None, fragment: None, compute: None, compiler: None, compiler_options: None, device }
     }
@@ -68,11 +68,11 @@ impl<'a> Shaders<'a> {
         }
         let compiler = self.compiler.as_ref().unwrap();
         if self.compiler_options.is_none() {
-            self.compiler_options = Some(CompileOptions::new().unwrap());
+            self.compiler_options = Some(Box::new(CompileOptions::new().unwrap()));
         }
-        let mut options = self.compiler_options.as_mut().unwrap();
+        let options = self.compiler_options.as_ref().unwrap();
         let source = std::fs::read_to_string(path.as_ref()).unwrap();
-        let compiled = compiler.compile_into_spirv(&source, kind, path.as_ref().to_str().unwrap(), "main", Some(&options)).unwrap();
+        let compiled = compiler.compile_into_spirv(&source, kind, path.as_ref().to_str().unwrap(), "main", Some(options)).unwrap();
         compiled.as_binary().to_vec()
     }
 
@@ -82,10 +82,10 @@ impl<'a> Shaders<'a> {
         }
         let compiler = self.compiler.as_ref().unwrap();
         if self.compiler_options.is_none() {
-            self.compiler_options = Some(CompileOptions::new().unwrap());
+            self.compiler_options = Some(Box::new(CompileOptions::new().unwrap()));
         }
-        let mut options = self.compiler_options.as_mut().unwrap();
-        let compiled = compiler.compile_into_spirv(&source, kind, "STRING_SOURCE", "main", Some(&options)).unwrap();
+        let options = self.compiler_options.as_ref().unwrap();
+        let compiled = compiler.compile_into_spirv(&source, kind, "STRING_SOURCE", "main", Some(options)).unwrap();
         compiled.as_binary().to_vec()
     }
 

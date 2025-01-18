@@ -1,6 +1,6 @@
 use vulkano::device::Device;
 use vulkano::memory::allocator::{StandardMemoryAllocator, AllocationCreateInfo, MemoryTypeFilter};
-use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer, BufferContents};
+use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer, BufferContents, IndexBuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryAutoCommandBuffer, CommandBufferExecFuture, PrimaryCommandBufferAbstract};
 use vulkano::device::Queue;
@@ -67,14 +67,16 @@ where
     ).expect("Failed to create buffer")
 }
 
-pub fn create_vertex_buffer(memory_allocator: Arc<StandardMemoryAllocator>, verts_iter: impl ExactSizeIterator<Item = Vert>) -> Subbuffer<[Vert]> {
-    let memory_type_filter = MemoryTypeFilter::PREFER_DEVICE;
-    create_buffer_from_iter(memory_allocator, memory_type_filter, BufferUsage::VERTEX_BUFFER, verts_iter)
+pub fn create_vertex_buffer(memory_allocator: Arc<StandardMemoryAllocator>, verts_iter: impl ExactSizeIterator<Item = Vert>) -> Arc<Subbuffer<[Vert]>> {
+    let memory_type_filter = UNIFORM_BUFFER_MEMORY_TYPE_FILTER;//MemoryTypeFilter::PREFER_DEVICE;
+    Arc::new(create_buffer_from_iter(memory_allocator, memory_type_filter, BufferUsage::VERTEX_BUFFER, verts_iter))
 }
 
-pub fn create_index_buffer(memory_allocator: Arc<StandardMemoryAllocator>, indices_iter: impl ExactSizeIterator<Item = u32>) -> Subbuffer<[u32]> {
-    let memory_type_filter = MemoryTypeFilter::PREFER_DEVICE;
-    create_buffer_from_iter(memory_allocator, memory_type_filter, BufferUsage::INDEX_BUFFER, indices_iter)
+pub fn create_index_buffer(memory_allocator: Arc<StandardMemoryAllocator>, indices_iter: impl ExactSizeIterator<Item = u32>) -> Arc<IndexBuffer> {
+    let memory_type_filter = UNIFORM_BUFFER_MEMORY_TYPE_FILTER; //MemoryTypeFilter::PREFER_DEVICE;
+    Arc::new(IndexBuffer::from(
+        create_buffer_from_iter(memory_allocator, memory_type_filter, BufferUsage::INDEX_BUFFER, indices_iter)
+    ))
 }
 
 //https://docs.rs/vulkano/0.34.0/vulkano/command_buffer/index.html

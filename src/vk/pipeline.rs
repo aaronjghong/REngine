@@ -9,10 +9,10 @@ use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::color_blend::ColorBlendState;
+use vulkano::pipeline::graphics::color_blend::{ColorBlendState, ColorBlendAttachmentState};
 use vulkano::descriptor_set::{PersistentDescriptorSet, WriteDescriptorSet};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
-use vulkano::buffer::{Buffer, Subbuffer, BufferContents};
+use vulkano::buffer::{Buffer, Subbuffer, BufferContents, IndexBuffer};
 
 use vulkano::render_pass::{RenderPass, Framebuffer, FramebufferCreateInfo, Subpass};
 use vulkano::command_buffer::{
@@ -134,6 +134,7 @@ pub fn record_render_pass<T: BufferContents + ?Sized>(
     set_index: u32, 
     // descriptor_set: Option<Arc<PersistentDescriptorSet>>, 
     vertex_buffer: Arc<Subbuffer<T>>, 
+    index_buffer: Arc<IndexBuffer>,
     vertex_count: u32, 
     instance_count: u32, 
     first_vertex: u32, 
@@ -141,7 +142,7 @@ pub fn record_render_pass<T: BufferContents + ?Sized>(
     builder
         .begin_render_pass(
             RenderPassBeginInfo{
-                clear_values: vec![Some([0.0, 0.0, 1.0, 1.0].into())], // Only blue for now... 
+                clear_values: vec![Some([1.0, 1.0, 1.0, 1.0].into())], // Only blue for now... 
                 ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
             },
             SubpassBeginInfo{
@@ -154,9 +155,11 @@ pub fn record_render_pass<T: BufferContents + ?Sized>(
         .unwrap()
         .bind_vertex_buffers(0, (*vertex_buffer).clone())
         .unwrap()
+        .bind_index_buffer((*index_buffer).clone())
+        .unwrap()
         // .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.layout().clone(), set_index, descriptor_set.clone())
         // .unwrap()
-        .draw(vertex_count, instance_count, first_vertex, first_instance)
+        .draw_indexed(vertex_count, instance_count, 0, first_vertex as i32, first_instance)
         .unwrap()
         .end_render_pass(SubpassEndInfo::default())
         .unwrap();
@@ -184,7 +187,10 @@ pub fn create_graphics_pipeline(device: Arc<Device>, shaders: &Shaders, viewport
             }),
             rasterization_state: Some(RasterizationState::default()),
             multisample_state: Some(MultisampleState::default()),
-            color_blend_state: Some(ColorBlendState::default()),
+            color_blend_state: Some(ColorBlendState::with_attachment_states(
+                subpass.num_color_attachments(),
+                ColorBlendAttachmentState::default(),
+            )),
             subpass: Some(subpass.into()),
             ..GraphicsPipelineCreateInfo::layout(pipeline_layout)
         }).expect("Failed to create graphics pipeline");
