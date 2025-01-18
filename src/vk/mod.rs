@@ -4,13 +4,27 @@ use vulkano::device::{Device, Queue, DeviceExtensions};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
-use vulkano::swapchain::{Surface};
+use vulkano::swapchain::{Surface, Swapchain};
+use vulkano::buffer::BufferUsage;
 use vulkano::device::physical::PhysicalDevice;
+use vulkano::pipeline::graphics::viewport::Viewport;
 use winit::event_loop::{EventLoop, ControlFlow};
 use winit::event::{Event, WindowEvent};
 use winit::window::{Window, WindowBuilder};
-
+use vulkano::image::Image;
+use vulkano::render_pass::{RenderPass, Framebuffer};
+use vulkano::buffer::BufferContents;
+use vulkano::pipeline::graphics::vertex_input::Vertex;
 use std::sync::Arc;
+
+
+#[derive(BufferContents, Vertex, Clone, Copy)]
+#[repr(C)]
+pub struct Vert {
+    #[format(R32G32B32_SFLOAT)]
+    pub position: [f32; 3],
+}
+
 
 mod device;
 mod buffer;
@@ -26,11 +40,16 @@ pub struct VkApp<'a> {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     memory_allocator: Arc<StandardMemoryAllocator>,
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-    shaders: Arc<shader::Shaders<'a>>,
+    shaders: shader::Shaders<'a>,
     window: Arc<Window>,
     surface: Arc<Surface>,
     physical_device: Arc<PhysicalDevice>,
+    swapchain: Arc<Swapchain>,
+    swapchain_images: Vec<Arc<Image>>,
+    render_pass: Arc<RenderPass>,
+    framebuffers: Vec<Arc<Framebuffer>>,
     event_loop: EventLoop<()>,
+    viewport: Viewport,
 }
 
 impl<'a> VkApp<'a> {
@@ -40,6 +59,13 @@ impl<'a> VkApp<'a> {
         let instance = create_instance(required_extensions);
         let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+
+        let mut viewport = Viewport {
+            offset: [0.0, 0.0],
+            extent: window.inner_size().into(),
+            depth_range: 0.0..=1.0,
+        };
+    
 
         let device_extensions = DeviceExtensions {
             khr_swapchain: true,
@@ -52,7 +78,12 @@ impl<'a> VkApp<'a> {
         ));
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(device.clone(), Default::default()));
-        let shaders = Arc::new(shader::Shaders::new(device.clone()));
+        let mut shaders = shader::Shaders::new(device.clone());
+
+        let (swapchain, swapchain_images) = image::create_swapchain(device.clone(), window.clone(), surface.clone(), physical_device.clone());
+        let render_pass = pipeline::create_render_pass(device.clone(), swapchain.image_format());
+        let framebuffers = pipeline::create_framebuffers(render_pass.clone(), swapchain_images.clone());
+
         VkApp {
             instance,
             device,
@@ -65,6 +96,11 @@ impl<'a> VkApp<'a> {
             window,
             surface,
             physical_device,
+            viewport,
+            swapchain,
+            swapchain_images,
+            render_pass,
+            framebuffers,
             event_loop,
         }
     }
@@ -90,6 +126,32 @@ impl<'a> VkApp<'a> {
     //     let command_buffer = self.command_buffer_allocator.new_command_buffer(QueueFamily::Graphics).unwrap();
     //     let command_buffer = image::clear_image(command_buffer, image.clone(), [0.0, 0.0, 0.0, 1.0]);
     // }
+
+    pub fn triangle_sample(&mut self) {
+        let vertices = vec![
+            Vert { position: [0.0, 0.5, 0.0]},
+            Vert { position: [-0.5, -0.5, 0.0]},
+            Vert { position: [0.5, -0.5, 0.0]},
+        ];
+
+        let vertex_buffer = buffer::create_buffer_from_iter(
+            self.memory_allocator.clone(), 
+            buffer::UNIFORM_BUFFER_MEMORY_TYPE_FILTER, 
+            BufferUsage::VERTEX_BUFFER, 
+            vertices.into_iter()
+        );
+
+        let vertex_buffer = Arc::new(vertex_buffer);
+
+        self.shaders.load_shader_from_file("vert.vs", "vertex");
+        self.shaders.load_shader_from_file("frag.fs", "fragment"); 
+
+        let pipeline = pipeline::create_graphics_pipeline(self.device.clone(), &self.shaders, self.viewport.clone(), self.render_pass.clone());
+        let command_buffer_builder = buffer::create_command_buffer_builder(self.command_buffer_allocator.clone(), self.queue.clone());
+        let command_buffer_builder = pipeline::record_render_pass(command_buffer_builder, self.render_pass.clone(), self.framebuffers[0].clone(), pipeline, 0, vertex_buffer, 3, 1, 0, 0);
+        let command_buffer = buffer::build_command_buffer(command_buffer_builder);
+        buffer::submit_execute_wait_fenced(self.device.clone(), self.queue.clone(), command_buffer);
+    }   
 }
 
 

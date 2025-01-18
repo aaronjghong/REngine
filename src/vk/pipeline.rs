@@ -31,17 +31,10 @@ use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use crate::vk::shader::Shaders;
 use crate::vk::image::create_image_view;
 use crate::vk::buffer::PrimaryCommandBufferBuilder;
-
+use crate::vk::Vert;
 pub struct Pipe {
     pub pipeline: Option<Arc<dyn Pipeline>>,
     pub layout: Option<Arc<PipelineLayout>>,
-}
-
-#[derive(BufferContents, Vertex)]
-#[repr(C)]
-struct Vert {
-    #[format(R32G32_SFLOAT)]
-    position: [f32; 2],
 }
 
 pub fn record_compute_pipeline(mut builder: PrimaryCommandBufferBuilder, pipeline: Arc<ComputePipeline>, set_index: u32, descriptor_set: Arc<PersistentDescriptorSet>, work_group_counts: [u32; 3]) -> PrimaryCommandBufferBuilder {
@@ -124,15 +117,27 @@ pub fn create_render_pass(device: Arc<Device>, image_format: Format) -> Arc<Rend
     render_pass
 }
 
-pub fn create_framebuffer(render_pass: Arc<RenderPass>, image: Arc<Image>) -> Arc<Framebuffer> {
-    let framebuffer = Framebuffer::new(render_pass.clone(), FramebufferCreateInfo{
-        attachments: vec![create_image_view(image.clone(), image.format())],
-        ..Default::default()
-    }).expect("Failed to create framebuffer");
-    framebuffer
+pub fn create_framebuffers(render_pass: Arc<RenderPass>, images: Vec<Arc<Image>>) -> Vec<Arc<Framebuffer>> {
+    images.iter().map(|image| {
+        Framebuffer::new(render_pass.clone(), FramebufferCreateInfo{
+            attachments: vec![create_image_view(image.clone(), image.format())],
+            ..Default::default()
+        }).expect("Failed to create framebuffer")
+    }).collect::<Vec<_>>()
 }
 
-pub fn record_render_pass<T: BufferContents>(mut builder: PrimaryCommandBufferBuilder, render_pass: Arc<RenderPass>, framebuffer: Arc<Framebuffer>, pipeline: Arc<GraphicsPipeline>, set_index: u32, descriptor_set: Arc<PersistentDescriptorSet>, vertex_buffer: Arc<Subbuffer<T>>, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) -> PrimaryCommandBufferBuilder {
+pub fn record_render_pass<T: BufferContents + ?Sized>(
+    mut builder: PrimaryCommandBufferBuilder, 
+    render_pass: Arc<RenderPass>,
+    framebuffer: Arc<Framebuffer>, 
+    pipeline: Arc<GraphicsPipeline>, 
+    set_index: u32, 
+    // descriptor_set: Option<Arc<PersistentDescriptorSet>>, 
+    vertex_buffer: Arc<Subbuffer<T>>, 
+    vertex_count: u32, 
+    instance_count: u32, 
+    first_vertex: u32, 
+    first_instance: u32) -> PrimaryCommandBufferBuilder {
     builder
         .begin_render_pass(
             RenderPassBeginInfo{
@@ -149,8 +154,8 @@ pub fn record_render_pass<T: BufferContents>(mut builder: PrimaryCommandBufferBu
         .unwrap()
         .bind_vertex_buffers(0, (*vertex_buffer).clone())
         .unwrap()
-        .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.layout().clone(), set_index, descriptor_set.clone())
-        .unwrap()
+        // .bind_descriptor_sets(PipelineBindPoint::Graphics, pipeline.layout().clone(), set_index, descriptor_set.clone())
+        // .unwrap()
         .draw(vertex_count, instance_count, first_vertex, first_instance)
         .unwrap()
         .end_render_pass(SubpassEndInfo::default())
@@ -158,13 +163,14 @@ pub fn record_render_pass<T: BufferContents>(mut builder: PrimaryCommandBufferBu
     builder
 }
 
-pub fn create_graphics_pipeline(device: Arc<Device>, shaders: &Shaders, viewport: Viewport, subpass: Subpass) -> Arc<GraphicsPipeline> {
+pub fn create_graphics_pipeline(device: Arc<Device>, shaders: &Shaders, viewport: Viewport, render_pass: Arc<RenderPass>) -> Arc<GraphicsPipeline> {
     let (pipeline_layout, shader_stages) = create_pipeline_layout(device.clone(), shaders);
     let stage = create_pipeline_stage_from_shader(shaders.fragment.clone().unwrap());
     let vertex_shader = shaders.vertex.clone().unwrap();
     let vertex_definition = Vert::per_vertex()
         .definition(&vertex_shader.entry_point("main").unwrap().info().input_interface)
         .unwrap();
+    let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
     let graphics_pipeline = GraphicsPipeline::new(
         device.clone(), 
         None, 
