@@ -8,6 +8,8 @@ use vulkano::memory::MemoryPropertyFlags;
 use vulkano::sync::{self, GpuFuture};
 use std::sync::Arc;
 
+pub type PrimaryCommandBufferBuilder = AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>;
+
 pub const STAGING_BUFFER_MEMORY_TYPE_FILTER: MemoryTypeFilter = MemoryTypeFilter{
     required_flags: MemoryPropertyFlags::HOST_VISIBLE.union(MemoryPropertyFlags::HOST_COHERENT),
     preferred_flags: MemoryPropertyFlags::empty(),
@@ -78,7 +80,7 @@ pub fn create_index_buffer(memory_allocator: Arc<StandardMemoryAllocator>, size:
 
 //https://docs.rs/vulkano/0.34.0/vulkano/command_buffer/index.html
 // Creates a primary command buffer that copies the contents of buffer_src to buffer_dst
-pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardCommandBufferAllocator>, queue: Arc<Queue>) -> AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>> {
+pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardCommandBufferAllocator>, queue: Arc<Queue>) -> PrimaryCommandBufferBuilder {
     let mut builder = AutoCommandBufferBuilder::primary(
         &command_buffer_allocator,
         queue.queue_family_index(),
@@ -97,7 +99,7 @@ pub fn create_command_buffer_builder(command_buffer_allocator: Arc<StandardComma
 //         .unwrap()
 // }
 
-pub fn build_command_buffer(command_buffer_builder: AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>, Arc<StandardCommandBufferAllocator>>) -> Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>> {
+pub fn build_command_buffer(command_buffer_builder: PrimaryCommandBufferBuilder) -> Arc<PrimaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>> {
     command_buffer_builder.build().unwrap()
 }
 
